@@ -1,46 +1,42 @@
-# Fabric Storage Insights
+# Storage Insights Prototype (Microsoft Fabric Warehouse)
 
-Fabric Storage Insights is a Rayfin Data App tailored to feel native inside a Microsoft Fabric Data Warehouse workspace.
+This repository contains a clickable React + TypeScript prototype for **Storage Insights** inside a Microsoft Fabric Warehouse shell experience.
 
-## What is included
+## Highlights
 
-- Latest **Rayfin Data App** project scaffolding
-- Fabric-auth setup and app metadata (`fabric.yaml`, `rayfin/rayfin.yml`)
-- Fluent UI based workspace shell, navigation tabs, KPI cards, table view, and activity feed
-- Mock storage insights data for local development before wiring a semantic model
+- Fabric-style shell framing (workspace + warehouse breadcrumbs, left navigation, command bar, preview badge)
+- Storage Insights pages:
+  - Overview
+  - Storage breakdown
+  - Tables
+  - Trends
+  - Query views
+  - Retention simulation (future concept)
+  - Alerts (future concept)
+- Reconciled local mock data (warehouse totals, category totals, and table totals)
+- Side-pane investigations for table details and anomalies
+- Fluent UI v9 components and Segoe UI styling
 
-## Local development
+## Prerequisites
+
+- Node.js 20+
+- npm 10+
+
+## Run locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-When running outside Fabric in development mode, the app automatically falls back to a local mock-auth path so you can build UI quickly.
-
-## Run tests
+## Checks
 
 ```bash
-npm test
-```
-
-## Build
-
-```bash
+npm run lint
 npm run build
 ```
 
-## Deploy and validate inside Fabric
+## Notes
 
-1. Sign in and provision/update app resources:
-   ```bash
-   npx rayfin up
-   ```
-2. Build deployable assets:
-   ```bash
-   npm run build:fabric
-   ```
-3. Open the app in Fabric shell with local dev URI:
-   ```bash
-   npm run test:fabric
-   ```
+- Prototype uses local mock data only.
+- No external services, secrets, or production Fabric API calls are required.
