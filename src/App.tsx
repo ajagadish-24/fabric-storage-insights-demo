@@ -47,20 +47,27 @@ import {
   anomalyDay,
   formatStorage,
   observations,
-  pendingGarbageCollectionGb,
   queryTemplates,
   queryViewDefinitions,
-  storageCategories,
-  storageMetrics,
+  salesCategories,
+  salesMetrics,
+  salesTableStorageRecords,
+  salesTrendPoints,
+  financeCategories,
+  financeMetrics,
+  financeTableStorageRecords,
+  financeTrendPoints,
+  warehousesList,
   storagePercent,
-  tableStorageRecords,
   totalStorageGb,
-  trendPoints,
   warehouseName,
   workspaceName,
   type QueryViewDefinition,
   type StorageTab,
   type TableStorageRecord,
+  type TrendPoint,
+  type StorageMetric,
+  type StorageCategory,
 } from "@/mock/storage-insights-data";
 
 const useStyles = makeStyles({
@@ -152,9 +159,9 @@ const useStyles = makeStyles({
     },
   },
   kpiValue: {
-    fontSize: "26px",
+    fontSize: "24px",
     fontWeight: 650,
-    lineHeight: "32px",
+    lineHeight: "30px",
   },
   sectionGrid: {
     display: "grid",
@@ -298,43 +305,49 @@ const useStyles = makeStyles({
     right: 0,
     top: 0,
     width: "430px",
-    maxWidth: "95vw",
     height: "100vh",
-    zIndex: 2000,
     backgroundColor: tokens.colorNeutralBackground1,
-    ...shorthands.borderLeft("1px", "solid", tokens.colorNeutralStroke2),
-    boxShadow: tokens.shadow64,
-    ...shorthands.padding("12px"),
-    overflow: "auto",
+    boxShadow: tokens.shadow25,
+    ...shorthands.padding("20px"),
+    boxSizing: "border-box",
+    zIndex: 1000,
     display: "grid",
     alignContent: "start",
-    gap: "10px",
+    gap: "16px",
+    overflow: "auto",
   },
   sidePaneHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  loadingBlock: {
-    height: "86px",
-    ...shorthands.borderRadius("8px"),
-    background: `linear-gradient(90deg, ${tokens.colorNeutralBackground3} 25%, ${tokens.colorNeutralBackground4} 50%, ${tokens.colorNeutralBackground3} 75%)`,
-    backgroundSize: "240% 100%",
-    animationName: {
-      from: { backgroundPosition: "100% 0" },
-      to: { backgroundPosition: "-100% 0" },
-    },
-    animationDuration: "1.4s",
-    animationIterationCount: "infinite",
+  sidePaneContent: {
+    display: "grid",
+    gap: "12px",
   },
   muted: {
-    color: tokens.colorNeutralForeground3,
+    color: tokens.colorNeutralForeground4,
+  },
+  loadingBlock: {
+    height: "40px",
+    backgroundColor: tokens.colorNeutralBackground1,
+    ...shorthands.borderRadius("4px"),
   },
   warningCard: {
-    backgroundColor: tokens.colorPaletteMarigoldBackground1,
+    backgroundColor: tokens.colorPaletteYellowBackground1,
+    ...shorthands.borderLeft("4px", "solid", tokens.colorPaletteYellowBorder1),
   },
-  errorCard: {
-    backgroundColor: tokens.colorPaletteRedBackground1,
+  infoCard: {
+    backgroundColor: tokens.colorPaletteBlueBackground1,
+    ...shorthands.borderLeft("4px", "solid", tokens.colorPaletteBlueBorder1),
+  },
+  top20Grid: {
+    display: "grid",
+    gridTemplateColumns: "1.2fr 1fr",
+    gap: "12px",
+    "@media (max-width: 1100px)": {
+      gridTemplateColumns: "1fr",
+    },
   },
 });
 
@@ -342,10 +355,9 @@ const storageColorMap: Record<string, string> = {
   "active-data": "#6B4EFF",
   "historical-data": "#9B8AFB",
   "soft-deleted-data": "#D7CFFF",
-  "system-generated-files": "#4F6BED",
-  "temporary-execution-files": "#7DA1FF",
   "query-insights": "#5E9D5E",
   "audit-logs": "#8AB77A",
+  "clone-retained": "#A1E6B2",
   "restore-points": "#EAA300",
   "vaulted-backups": "#8E8E8E",
   "expired-parquet": "#E65F5C",
@@ -354,10 +366,10 @@ const storageColorMap: Record<string, string> = {
   "warehouse-system-folder": "#5C5C5C",
 };
 
-function metricValue(metricId: string): string {
+function metricValue(metricId: string, metrics: StorageMetric[]): string {
   if (metricId === "retention") return "30 days";
   if (metricId === "last-refresh") return "Today, 6:00 AM";
-  const metric = storageMetrics.find((item) => item.id === metricId);
+  const metric = metrics.find((item) => item.id === metricId);
   if (!metric) return "";
   if (metric.unit === "TB") return `${metric.value.toFixed(2)} TB`;
   if (metric.unit === "GB") return `${Math.round(metric.value)} GB`;
@@ -365,6 +377,7 @@ function metricValue(metricId: string): string {
 }
 
 function buildTrendPath(values: number[], maxValue: number, width: number, height: number): string {
+  if (values.length === 0) return "";
   return values
     .map((value, index) => {
       const x = (index / (values.length - 1)) * width;
@@ -375,7 +388,7 @@ function buildTrendPath(values: number[], maxValue: number, width: number, heigh
 }
 
 function SqlSyntax({ query }: { query: string }) {
-  const keywordPattern = /\b(SELECT|FROM|WHERE|ORDER BY|GROUP BY|TOP|IN|DESC|ASC|DATEDIFF|GETUTCDATE|AND|OR)\b/gi;
+  const keywordPattern = /(SELECT|FROM|WHERE|ORDER BY|GROUP BY|TOP|IN|DESC|ASC|DATEDIFF|GETUTCDATE|AND|OR)/gi;
   const segments = query.split(keywordPattern);
 
   return (
@@ -388,7 +401,7 @@ function SqlSyntax({ query }: { query: string }) {
             key={`${segment}-${index}`}
             style={{
               color: isKeyword ? tokens.colorBrandForeground1 : tokens.colorNeutralForeground1,
-              fontWeight: isKeyword ? 600 : 400,
+              fontWeight: isKeyword ? "bold" : "normal",
             }}
           >
             {segment}
@@ -404,6 +417,7 @@ function App() {
   const { isDark, toggleTheme } = useThemeContext();
   const theme = useMemo(() => (isDark ? webDarkTheme : webLightTheme), [isDark]);
 
+  const [selectedWarehouse, setSelectedWarehouse] = useState("SalesAnalyticsDW");
   const [selectedTab, setSelectedTab] = useState<StorageTab>("overview");
   const [selectedBreakdownFilter, setSelectedBreakdownFilter] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -425,23 +439,44 @@ function App() {
 
   const [retentionDays, setRetentionDays] = useState("14");
 
+  // Dynamic state selectors
+  const activeCategories = useMemo(() => {
+    return selectedWarehouse === "SalesAnalyticsDW" ? salesCategories : financeCategories;
+  }, [selectedWarehouse]);
+
+  const activeMetrics = useMemo(() => {
+    return selectedWarehouse === "SalesAnalyticsDW" ? salesMetrics : financeMetrics;
+  }, [selectedWarehouse]);
+
+  const activeTableRecords = useMemo(() => {
+    return selectedWarehouse === "SalesAnalyticsDW" ? salesTableStorageRecords : financeTableStorageRecords;
+  }, [selectedWarehouse]);
+
+  const activeTrendPoints = useMemo(() => {
+    return selectedWarehouse === "SalesAnalyticsDW" ? salesTrendPoints : financeTrendPoints;
+  }, [selectedWarehouse]);
+
+  const totalStorageGbActive = useMemo(() => {
+    return activeCategories.reduce((sum, category) => sum + category.sizeGb, 0);
+  }, [activeCategories]);
+
   const selectedView =
     queryViewDefinitions.find((view) => view.viewName === selectedViewName) ?? queryViewDefinitions[0];
 
   const filteredBreakdownCategories = useMemo(() => {
     if (!selectedBreakdownFilter.length) {
-      return storageCategories;
+      return activeCategories;
     }
-    return storageCategories.filter((category) => selectedBreakdownFilter.includes(category.id));
-  }, [selectedBreakdownFilter]);
+    return activeCategories.filter((category) => selectedBreakdownFilter.includes(category.id));
+  }, [selectedBreakdownFilter, activeCategories]);
 
   const tableSchemas = useMemo(
-    () => Array.from(new Set(tableStorageRecords.map((table) => table.schema))).sort(),
-    [],
+    () => Array.from(new Set(activeTableRecords.map((table) => table.schema))).sort(),
+    [activeTableRecords],
   );
 
   const filteredTables = useMemo(() => {
-    let tables = [...tableStorageRecords];
+    let tables = [...activeTableRecords];
 
     if (searchText.trim()) {
       const term = searchText.trim().toLowerCase();
@@ -475,18 +510,24 @@ function App() {
     }
 
     return tables.slice(0, 20);
-  }, [searchText, schemaFilter, tableTypeFilter, storageFilter, ranking]);
+  }, [searchText, schemaFilter, tableTypeFilter, storageFilter, ranking, activeTableRecords]);
 
   const projectedHistoricalGb = useMemo(() => {
+    const historicalCategory = activeCategories.find(c => c.id === "historical-data");
+    const historicalVal = historicalCategory ? historicalCategory.sizeGb : 2800;
     const proposedDays = Number(retentionDays);
     if (Number.isNaN(proposedDays) || proposedDays <= 0) {
-      return 2478.08;
+      return historicalVal;
     }
     const ratio = Math.min(1, proposedDays / 30);
-    return Number((2478.08 * ratio).toFixed(2));
-  }, [retentionDays]);
+    return Number((historicalVal * ratio).toFixed(2));
+  }, [retentionDays, activeCategories]);
 
-  const projectedSavingsGb = Number((2478.08 - projectedHistoricalGb).toFixed(2));
+  const projectedSavingsGb = useMemo(() => {
+    const historicalCategory = activeCategories.find(c => c.id === "historical-data");
+    const historicalVal = historicalCategory ? historicalCategory.sizeGb : 2800;
+    return Number((historicalVal - projectedHistoricalGb).toFixed(2));
+  }, [projectedHistoricalGb, activeCategories]);
 
   const handleRefresh = () => {
     setLoading(true);
@@ -504,16 +545,37 @@ function App() {
     setSelectedTab("breakdown");
   };
 
-  const anomalyPoint = trendPoints.find((point) => point.day === anomalyDay);
+  const anomalyPoint = activeTrendPoints.find((point) => point.day === anomalyDay);
 
   const categoryReconciliation = Number(
-    storageCategories.reduce((sum, category) => sum + category.sizeGb, 0).toFixed(2),
+    activeCategories.reduce((sum, category) => sum + category.sizeGb, 0).toFixed(2),
   );
   const tableReconciliation = Number(
-    tableStorageRecords.reduce((sum, table) => sum + table.totalGb, 0).toFixed(2),
+    activeTableRecords.reduce((sum, table) => sum + table.totalGb, 0).toFixed(2),
   );
 
   const leftNavItems = ["Home", "Explorer", "Query", "Data model", "Monitoring", "Settings"];
+
+  // Drilldown lists based on active workspace
+  const drilldownSchemas = useMemo(() => {
+    return Array.from(new Set(activeTableRecords.map(t => t.schema))).sort();
+  }, [activeTableRecords]);
+
+  const [drilldownSchema, setDrilldownSchema] = useState("all");
+  const [drilldownTable, setDrilldownTable] = useState("all");
+
+  const drilldownTablesFiltered = useMemo(() => {
+    let t = activeTableRecords;
+    if (drilldownSchema !== "all") {
+      t = t.filter(x => x.schema === drilldownSchema);
+    }
+    return t.sort((a, b) => b.totalGb - a.totalGb);
+  }, [activeTableRecords, drilldownSchema]);
+
+  const activeDrilldownTableObj = useMemo(() => {
+    if (drilldownTable === "all") return null;
+    return activeTableRecords.find(t => t.id === drilldownTable) || null;
+  }, [activeTableRecords, drilldownTable]);
 
   return (
     <FluentProvider theme={theme} className={styles.app}>
@@ -524,7 +586,7 @@ function App() {
           <Caption1>{workspaceName}</Caption1>
           <Text className={styles.muted}>/</Text>
           <DatabaseRegular />
-          <Caption1>{warehouseName}</Caption1>
+          <Caption1>{selectedWarehouse}</Caption1>
           <Badge appearance="tint" color="informative">
             Warehouse
           </Badge>
@@ -563,9 +625,21 @@ function App() {
               <Caption1>{workspaceName}</Caption1>
               <Text>/</Text>
               <DatabaseRegular />
-              <Caption1>{warehouseName}</Caption1>
+              <Dropdown
+                value={selectedWarehouse}
+                onOptionSelect={(_, data) => {
+                  setSelectedWarehouse(data.optionValue ?? "SalesAnalyticsDW");
+                  setDrilldownSchema("all");
+                  setDrilldownTable("all");
+                }}
+                style={{ minWidth: "180px" }}
+              >
+                {warehousesList.map(w => (
+                  <Option key={w} value={w}>{w}</Option>
+                ))}
+              </Dropdown>
               <Text>/</Text>
-              <Body1Strong>Storage Insights</Body1Strong>
+              <Body1Strong>Warehouse Insights</Body1Strong>
               <Badge appearance="tint" color="important">
                 Preview
               </Badge>
@@ -642,6 +716,9 @@ function App() {
                   setSelectedTab("trends");
                   setSelectedAnomaly(true);
                 }}
+                activeMetrics={activeMetrics}
+                activeTrendPoints={activeTrendPoints}
+                activeCategories={activeCategories}
               />
             ) : null}
 
@@ -651,6 +728,9 @@ function App() {
                 filteredCategoryIds={selectedBreakdownFilter}
                 onClearFilter={() => setSelectedBreakdownFilter([])}
                 filteredCategories={filteredBreakdownCategories}
+                activeCategories={activeCategories}
+                totalStorageGb={totalStorageGbActive}
+                activeTableRecords={activeTableRecords}
               />
             ) : null}
 
@@ -670,6 +750,14 @@ function App() {
                 setRanking={setRanking}
                 filteredTables={filteredTables}
                 onSelectTable={setSelectedTable}
+                drilldownSchemas={drilldownSchemas}
+                drilldownSchema={drilldownSchema}
+                setDrilldownSchema={setDrilldownSchema}
+                drilldownTables={drilldownTablesFiltered}
+                drilldownTable={drilldownTable}
+                setDrilldownTable={setDrilldownTable}
+                activeDrilldownTableObj={activeDrilldownTableObj}
+                activeTableRecords={activeTableRecords}
               />
             ) : null}
 
@@ -678,6 +766,7 @@ function App() {
                 styles={styles}
                 onOpenAnomaly={() => setSelectedAnomaly(true)}
                 onGoToTables={() => setSelectedTab("tables")}
+                activeTrendPoints={activeTrendPoints}
               />
             ) : null}
 
@@ -742,41 +831,47 @@ function OverviewPage({
   onKpiClick,
   onOpenTables,
   onOpenAnomaly,
+  activeMetrics,
+  activeTrendPoints,
+  activeCategories,
 }: {
   styles: ReturnType<typeof useStyles>;
   onKpiClick: (categoryIds?: string[]) => void;
   onOpenTables: () => void;
   onOpenAnomaly: () => void;
+  activeMetrics: StorageMetric[];
+  activeTrendPoints: TrendPoint[];
+  activeCategories: StorageCategory[];
 }) {
   const chartSeries = [
     {
       name: "Total storage",
       color: "#6B4EFF",
-      values: trendPoints.map((point) => point.totalGb),
+      values: activeTrendPoints.map((point) => point.totalGb),
     },
     {
       name: "Active storage",
       color: "#4F6BED",
-      values: trendPoints.map((point) => point.activeGb),
+      values: activeTrendPoints.map((point) => point.activeGb),
     },
     {
       name: "Historical storage",
       color: "#B85AB5",
-      values: trendPoints.map((point) => point.historicalGb),
+      values: activeTrendPoints.map((point) => point.historicalGb),
     },
     {
       name: "System storage",
       color: "#5E9D5E",
-      values: trendPoints.map((point) => point.systemGb),
+      values: activeTrendPoints.map((point) => point.systemGb),
     },
   ];
 
-  const maxValue = Math.max(...chartSeries.flatMap((series) => series.values));
+  const maxValue = Math.max(...chartSeries.flatMap((series) => series.values), 1);
 
   return (
     <>
       <div className={styles.kpiGrid}>
-        {storageMetrics.map((metric) => (
+        {activeMetrics.map((metric) => (
           <Tooltip key={metric.id} relationship="description" content={metric.description}>
             <Card className={styles.clickableCard} onClick={() => onKpiClick(metric.filterCategoryIds)}>
               <CardHeader
@@ -789,7 +884,7 @@ function OverviewPage({
                   )
                 }
               />
-              <div className={styles.kpiValue}>{metricValue(metric.id)}</div>
+              <div className={styles.kpiValue}>{metricValue(metric.id, activeMetrics)}</div>
             </Card>
           </Tooltip>
         ))}
@@ -798,129 +893,84 @@ function OverviewPage({
       <div className={styles.sectionGrid}>
         <Card className={styles.chartContainer}>
           <CardHeader
-            header={<Body1Strong>Storage composition</Body1Strong>}
-            description={<Caption1>Warehouse storage footprint by operational category</Caption1>}
+            header={<Body1Strong>Warehouse growth trend</Body1Strong>}
+            description={<Caption1>Storage consumption trend for the last 30 days</Caption1>}
           />
-          <div className={styles.horizontalStack}>
-            {storageCategories.map((category) => (
-              <div
-                key={category.id}
-                className={styles.stackSegment}
-                style={{
-                  width: `${storagePercent(category.sizeGb)}%`,
-                  backgroundColor: storageColorMap[category.id],
-                }}
-                title={`${category.name}: ${formatStorage(category.sizeGb)} (${storagePercent(category.sizeGb)}%)`}
+          <svg viewBox="0 0 1000 240" className={styles.trendSvg} role="img" aria-label="Overview trend chart">
+            {chartSeries.map((series) => (
+              <path
+                key={series.name}
+                d={buildTrendPath(series.values, maxValue, 980, 200)}
+                transform="translate(10,20)"
+                fill="none"
+                stroke={series.color}
+                strokeWidth="2.5"
               />
             ))}
-          </div>
+          </svg>
           <div className={styles.legendGrid}>
-            {storageCategories.map((category) => (
-              <div key={category.id} className={styles.legendItem}>
-                <span className={styles.legendSwatch} style={{ backgroundColor: storageColorMap[category.id] }} />
-                <Caption1>
-                  {category.name}: {formatStorage(category.sizeGb)}
-                </Caption1>
+            {chartSeries.map((series) => (
+              <div key={series.name} className={styles.legendItem}>
+                <span className={styles.legendSwatch} style={{ backgroundColor: series.color }} />
+                <Caption1>{series.name}</Caption1>
               </div>
             ))}
           </div>
         </Card>
 
-        <Card className={styles.chartContainer}>
+        <Card>
           <CardHeader
-            header={<Body1Strong>Top storage contributors</Body1Strong>}
-            description={<Caption1>Top 5 tables driving warehouse footprint</Caption1>}
+            header={<Body1Strong>Storage composition</Body1Strong>}
+            description={<Caption1>Proportion of billing and operational categories</Caption1>}
           />
-          <div className={styles.denseTableWrap}>
-            <table className={styles.denseTable}>
-              <thead>
-                <tr>
-                  <th className={styles.denseCell}>Schema</th>
-                  <th className={styles.denseCell}>Table</th>
-                  <th className={styles.denseCell}>Total</th>
-                  <th className={styles.denseCell}>Active</th>
-                  <th className={styles.denseCell}>Historical</th>
-                  <th className={styles.denseCell}>30-day growth</th>
-                  <th className={styles.denseCell}>Last accessed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tableStorageRecords
-                  .slice()
-                  .sort((a, b) => b.totalGb - a.totalGb)
-                  .slice(0, 5)
-                  .map((table) => (
-                    <tr key={table.id} className={styles.rowHover} onClick={onOpenTables}>
-                      <td className={styles.denseCell}>{table.schema}</td>
-                      <td className={styles.denseCell}>{table.tableName}</td>
-                      <td className={styles.denseCell}>{formatStorage(table.totalGb)}</td>
-                      <td className={styles.denseCell}>{formatStorage(table.activeGb)}</td>
-                      <td className={styles.denseCell}>{formatStorage(table.historicalGb)}</td>
-                      <td className={styles.denseCell}>{table.growth30dPct.toFixed(1)}%</td>
-                      <td className={styles.denseCell}>{table.lastAccessed}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+          <div className={styles.horizontalStack}>
+            {activeCategories.map((category) => (
+              <div
+                key={category.id}
+                className={styles.stackSegment}
+                style={{
+                  width: `${(category.sizeGb / activeCategories.reduce((sum, item) => sum + item.sizeGb, 0)) * 100}%`,
+                  backgroundColor: storageColorMap[category.id] || "#8E8E8E",
+                }}
+              />
+            ))}
+          </div>
+          <div style={{ display: "grid", gap: "8px", marginTop: "12px" }}>
+            {activeCategories.map((category) => (
+              <div key={category.id} className={styles.legendItem}>
+                <span className={styles.legendSwatch} style={{ backgroundColor: storageColorMap[category.id] || "#8E8E8E" }} />
+                <Body1 style={{ flexGrow: 1 }}>{category.name}</Body1>
+                <Body1Strong>{formatStorage(category.sizeGb)}</Body1Strong>
+              </div>
+            ))}
           </div>
         </Card>
       </div>
 
-      <Card className={styles.chartContainer}>
-        <CardHeader
-          header={<Body1Strong>Storage trend (30 days)</Body1Strong>}
-          description={<Caption1>Includes visible anomaly marker for rapid growth</Caption1>}
-        />
-        <svg viewBox="0 0 1000 260" className={styles.trendSvg} role="img" aria-label="Storage trend chart">
-          {chartSeries.map((series) => (
-            <path
-              key={series.name}
-              d={buildTrendPath(series.values, maxValue, 980, 220)}
-              transform="translate(10,20)"
-              fill="none"
-              stroke={series.color}
-              strokeWidth="2"
-            />
-          ))}
-          {trendPoints.map((point, index) => {
-            if (point.day !== anomalyDay) return null;
-            const x = (index / (trendPoints.length - 1)) * 980 + 10;
-            const y = 240 - (point.totalGb / maxValue) * 220;
-            return (
-              <g key={point.day} onClick={onOpenAnomaly} style={{ cursor: "pointer" }}>
-                <circle cx={x} cy={y} r="6" fill="#E65F5C" />
-                <text x={x + 8} y={y - 8} fontSize="12" fill="#E65F5C">
-                  Anomaly
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-        <div className={styles.pillRow}>
-          {chartSeries.map((series) => (
-            <Badge key={series.name} appearance="filled" style={{ backgroundColor: series.color, color: "#fff" }}>
-              {series.name}
-            </Badge>
-          ))}
-        </div>
-      </Card>
-
-      <Card>
-        <CardHeader
-          header={<Body1Strong>Storage observations</Body1Strong>}
-          description={<Caption1>Fabric-generated observations to support investigation and review</Caption1>}
-        />
-        <div className={styles.observationGrid}>
-          {observations.map((observation) => (
-            <Card key={observation.id} className={observation.severity === "warning" ? styles.warningCard : undefined}>
-              <CardHeader
-                header={<Body1Strong>{observation.title}</Body1Strong>}
-                description={<Body1>{observation.detail}</Body1>}
-              />
-            </Card>
-          ))}
-        </div>
-      </Card>
+      <Title3>Storage observations</Title3>
+      <div className={styles.observationGrid}>
+        {observations.map((obs) => (
+          <Card
+            key={obs.id}
+            className={obs.severity === "warning" ? styles.warningCard : styles.infoCard}
+            onClick={obs.id === "obs-gc" ? () => onKpiClick(["expired-parquet", "expired-log", "non-referenced"]) : undefined}
+            style={{ cursor: obs.id === "obs-gc" ? "pointer" : "default" }}
+          >
+            <CardHeader header={<Body1Strong>{obs.title}</Body1Strong>} />
+            <Body1>{obs.detail}</Body1>
+            {obs.id === "obs-historical" ? (
+              <Button appearance="secondary" size="small" style={{ alignSelf: "start", marginTop: "6px" }} onClick={onOpenAnomaly}>
+                Inspect historical trend
+              </Button>
+            ) : null}
+            {obs.id === "obs-low-activity" ? (
+              <Button appearance="secondary" size="small" style={{ alignSelf: "start", marginTop: "6px" }} onClick={onOpenTables}>
+                Open filtered Tables view
+              </Button>
+            ) : null}
+          </Card>
+        ))}
+      </div>
     </>
   );
 }
@@ -930,13 +980,19 @@ function StorageBreakdownPage({
   filteredCategoryIds,
   onClearFilter,
   filteredCategories,
+  activeCategories,
+  totalStorageGb,
+  activeTableRecords,
 }: {
   styles: ReturnType<typeof useStyles>;
   filteredCategoryIds: string[];
   onClearFilter: () => void;
-  filteredCategories: typeof storageCategories;
+  filteredCategories: typeof salesCategories;
+  activeCategories: typeof salesCategories;
+  totalStorageGb: number;
+  activeTableRecords: TableStorageRecord[];
 }) {
-  const pendingCategories = storageCategories.filter((category) =>
+  const pendingCategories = activeCategories.filter((category) =>
     ["expired-parquet", "expired-log", "non-referenced"].includes(category.id),
   );
 
@@ -955,7 +1011,7 @@ function StorageBreakdownPage({
                 className={styles.stackSegment}
                 style={{
                   width: `${(category.sizeGb / filteredCategories.reduce((sum, item) => sum + item.sizeGb, 0)) * 100}%`,
-                  backgroundColor: storageColorMap[category.id],
+                  backgroundColor: storageColorMap[category.id] || "#8E8E8E",
                 }}
               />
             ))}
@@ -989,7 +1045,9 @@ function StorageBreakdownPage({
                   <tr key={category.id}>
                     <td className={styles.denseCell}>{category.name}</td>
                     <td className={styles.denseCell}>{formatStorage(category.sizeGb)}</td>
-                    <td className={styles.denseCell}>{storagePercent(category.sizeGb).toFixed(1)}%</td>
+                    <td className={styles.denseCell}>
+                      {((category.sizeGb / totalStorageGb) * 100).toFixed(1)}%
+                    </td>
                     <td className={styles.denseCell}>{category.description}</td>
                     <td className={styles.denseCell}>{category.billingState}</td>
                     <td className={styles.denseCell}>{category.cleanupBehavior}</td>
@@ -1008,10 +1066,10 @@ function StorageBreakdownPage({
           />
           <Body1>Total storage: {formatStorage(totalStorageGb)}</Body1>
           <Body1>
-            Category sum: {formatStorage(storageCategories.reduce((sum, category) => sum + category.sizeGb, 0))}
+            Category sum: {formatStorage(activeCategories.reduce((sum, category) => sum + category.sizeGb, 0))}
           </Body1>
           <Body1>
-            Table-attributed sum: {formatStorage(tableStorageRecords.reduce((sum, table) => sum + table.totalGb, 0))}
+            Table-attributed sum: {formatStorage(activeTableRecords.reduce((sum, table) => sum + table.totalGb, 0))}
           </Body1>
           <Badge appearance="filled" color="success">
             Category totals reconciled
@@ -1031,8 +1089,10 @@ function StorageBreakdownPage({
           <table className={styles.denseTable}>
             <thead>
               <tr>
-                <th className={styles.denseCell}>Category</th>
-                <th className={styles.denseCell}>Storage size</th>
+                <th className={styles.denseCell}>Reclaimable folder</th>
+                <th className={styles.denseCell}>Storage pending GC</th>
+                <th className={styles.denseCell}>Billing state</th>
+                <th className={styles.denseCell}>Reclaim process</th>
               </tr>
             </thead>
             <tbody>
@@ -1040,16 +1100,10 @@ function StorageBreakdownPage({
                 <tr key={category.id}>
                   <td className={styles.denseCell}>{category.name}</td>
                   <td className={styles.denseCell}>{formatStorage(category.sizeGb)}</td>
+                  <td className={styles.denseCell}>{category.billingState}</td>
+                  <td className={styles.denseCell}>Background GC scheduled</td>
                 </tr>
               ))}
-              <tr>
-                <td className={styles.denseCell}>
-                  <Body1Strong>Total potentially reclaimable storage</Body1Strong>
-                </td>
-                <td className={styles.denseCell}>
-                  <Body1Strong>{formatStorage(pendingGarbageCollectionGb)}</Body1Strong>
-                </td>
-              </tr>
             </tbody>
           </table>
         </div>
@@ -1073,6 +1127,14 @@ function TablesPage({
   setRanking,
   filteredTables,
   onSelectTable,
+  drilldownSchemas,
+  drilldownSchema,
+  setDrilldownSchema,
+  drilldownTables,
+  drilldownTable,
+  setDrilldownTable,
+  activeDrilldownTableObj,
+  activeTableRecords,
 }: {
   styles: ReturnType<typeof useStyles>;
   schemas: string[];
@@ -1088,9 +1150,153 @@ function TablesPage({
   setRanking: (value: string) => void;
   filteredTables: TableStorageRecord[];
   onSelectTable: (table: TableStorageRecord) => void;
+  drilldownSchemas: string[];
+  drilldownSchema: string;
+  setDrilldownSchema: (value: string) => void;
+  drilldownTables: TableStorageRecord[];
+  drilldownTable: string;
+  setDrilldownTable: (value: string) => void;
+  activeDrilldownTableObj: TableStorageRecord | null;
+  activeTableRecords: TableStorageRecord[];
 }) {
+  const top20Tables = useMemo(() => {
+    return [...activeTableRecords].sort((a, b) => b.totalGb - a.totalGb).slice(0, 20);
+  }, [activeTableRecords]);
+
+  const maxTableGb = Math.max(...top20Tables.map((t) => t.totalGb), 1);
+
   return (
     <>
+      {/* 1. Warehouse -> Schema -> Table Drilldown Card */}
+      <Card style={{ backgroundColor: tokens.colorNeutralBackground2 }}>
+        <CardHeader
+          header={<Title3>Warehouse Insights Drilldown Explorer</Title3>}
+          description={<Caption1>Interact with the hierarchy directly to inspect details</Caption1>}
+        />
+        <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", ...shorthands.padding("10px") }}>
+          <Field label="1. Schema drilldown">
+            <Dropdown
+              value={drilldownSchema === "all" ? "Select schema" : drilldownSchema}
+              onOptionSelect={(_, data) => {
+                setDrilldownSchema(data.optionValue ?? "all");
+                setDrilldownTable("all");
+              }}
+              style={{ minWidth: "160px" }}
+            >
+              <Option value="all">All schemas</Option>
+              {drilldownSchemas.map(s => (
+                <Option key={s} value={s}>{s}</Option>
+              ))}
+            </Dropdown>
+          </Field>
+
+          <Field label="2. Table drilldown">
+            <Dropdown
+              value={drilldownTable === "all" ? "Select table" : (activeDrilldownTableObj ? activeDrilldownTableObj.tableName : "Select table")}
+              onOptionSelect={(_, data) => setDrilldownTable(data.optionValue ?? "all")}
+              disabled={drilldownSchema === "all"}
+              style={{ minWidth: "220px" }}
+            >
+              <Option value="all">Select table...</Option>
+              {drilldownTables.map(t => (
+                <Option key={t.id} value={t.id}>{t.schema}.{t.tableName}</Option>
+              ))}
+            </Dropdown>
+          </Field>
+        </div>
+
+        {activeDrilldownTableObj ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px", marginTop: "12px" }}>
+            <Card style={{ backgroundColor: tokens.colorNeutralBackground1 }}>
+              <Caption1>Table Type</Caption1>
+              <Body1Strong>{activeDrilldownTableObj.tableType}</Body1Strong>
+            </Card>
+            <Card style={{ backgroundColor: tokens.colorNeutralBackground1 }}>
+              <Caption1>Total Storage</Caption1>
+              <Body1Strong>{formatStorage(activeDrilldownTableObj.totalGb)}</Body1Strong>
+            </Card>
+            <Card style={{ backgroundColor: tokens.colorNeutralBackground1 }}>
+              <Caption1>Active Storage</Caption1>
+              <Body1Strong>{formatStorage(activeDrilldownTableObj.activeGb)}</Body1Strong>
+            </Card>
+            <Card style={{ backgroundColor: tokens.colorNeutralBackground1 }}>
+              <Caption1>Historical Storage</Caption1>
+              <Body1Strong>{formatStorage(activeDrilldownTableObj.historicalGb)}</Body1Strong>
+            </Card>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Button appearance="primary" icon={<OpenRegular />} onClick={() => onSelectTable(activeDrilldownTableObj)}>
+                Open full details
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ ...shorthands.padding("12px"), textAlign: "center", color: tokens.colorNeutralForeground4 }}>
+            <Caption1>Select a schema and table above to drill down into details</Caption1>
+          </div>
+        )}
+      </Card>
+
+      {/* 2. Top 20 Largest Tables Visual and Grid */}
+      <div className={styles.top20Grid}>
+        <Card>
+          <CardHeader
+            header={<Body1Strong>Top 20 Largest Tables (Visual Profile)</Body1Strong>}
+            description={<Caption1>Visual comparison of table sizes in GB/TB</Caption1>}
+          />
+          <div style={{ display: "grid", gap: "8px", maxHeight: "400px", overflowY: "auto", ...shorthands.padding("10px") }}>
+            {top20Tables.map((table, i) => (
+              <div key={table.id} style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <Caption1>{i + 1}. {table.schema}.{table.tableName}</Caption1>
+                  <Caption1 style={{ fontWeight: "bold" }}>{formatStorage(table.totalGb)}</Caption1>
+                </div>
+                <div style={{ display: "flex", width: "100%", height: "12px", backgroundColor: tokens.colorNeutralBackground2, ...shorthands.borderRadius("4px"), overflow: "hidden" }}>
+                  <div
+                    style={{
+                      width: `${(table.totalGb / maxTableGb) * 100}%`,
+                      backgroundColor: tokens.colorBrandBackground,
+                      height: "100%",
+                      ...shorthands.borderRadius("4px"),
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader
+            header={<Body1Strong>Top 20 Table Ingestion & Activity</Body1Strong>}
+            description={<Caption1>Performance characteristics of the largest tables</Caption1>}
+          />
+          <div className={styles.denseTableWrap}>
+            <table className={styles.denseTable}>
+              <thead>
+                <tr>
+                  <th className={styles.denseCell}>Table</th>
+                  <th className={styles.denseCell}>Growth (30d)</th>
+                  <th className={styles.denseCell}>Queries (30d)</th>
+                  <th className={styles.denseCell}>Files Count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {top20Tables.map((table) => (
+                  <tr key={table.id} className={styles.rowHover} onClick={() => onSelectTable(table)}>
+                    <td className={styles.denseCell}>{table.schema}.{table.tableName}</td>
+                    <td className={styles.denseCell} style={{ color: table.growth30dPct > 15 ? tokens.colorPaletteRedForeground1 : tokens.colorNeutralForeground1 }}>
+                      {table.growth30dPct.toFixed(1)}%
+                    </td>
+                    <td className={styles.denseCell}>{table.queriesLast30Days.toLocaleString()}</td>
+                    <td className={styles.denseCell}>{table.fileCount.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader
           header={<Body1Strong>Warehouse-to-schema-to-table drilldown</Body1Strong>}
@@ -1234,12 +1440,29 @@ function TrendsPage({
   styles,
   onOpenAnomaly,
   onGoToTables,
+  activeTrendPoints,
 }: {
   styles: ReturnType<typeof useStyles>;
   onOpenAnomaly: () => void;
   onGoToTables: () => void;
+  activeTrendPoints: TrendPoint[];
 }) {
-  const maxValue = Math.max(...trendPoints.map((point) => point.totalGb));
+  const maxValue = Math.max(...activeTrendPoints.map((point) => point.totalGb), 1);
+
+  // Growth Analysis: calculate daily growth
+  const dailyGrowthData = useMemo(() => {
+    return activeTrendPoints.map((point, index) => {
+      const prev = activeTrendPoints[index - 1]?.totalGb ?? point.totalGb;
+      const diff = point.totalGb - prev;
+      return {
+        day: point.day,
+        growthGb: diff,
+        growthPct: prev === 0 ? 0 : (diff / prev) * 100,
+      };
+    });
+  }, [activeTrendPoints]);
+
+  const maxGrowthGb = Math.max(...dailyGrowthData.map(d => Math.abs(d.growthGb)), 1);
 
   return (
     <>
@@ -1291,15 +1514,29 @@ function TrendsPage({
         </div>
       </Card>
 
+      {/* Storage Trend Chart */}
       <Card className={styles.chartContainer}>
         <CardHeader
           header={<Body1Strong>Warehouse storage trend</Body1Strong>}
           description={<Caption1>Visible spike marks anomalous growth event</Caption1>}
         />
         <svg viewBox="0 0 1000 260" className={styles.trendSvg} role="img" aria-label="Warehouse growth trend">
+          {/* Fill/Area beneath path */}
+          <path
+            d={`${buildTrendPath(activeTrendPoints.map((point) => point.totalGb), maxValue, 980, 220)} L 980 240 L 0 240 Z`}
+            transform="translate(10,20)"
+            fill="url(#trendGrad)"
+            opacity="0.1"
+          />
+          <defs>
+            <linearGradient id="trendGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#6B4EFF" />
+              <stop offset="100%" stopColor="#6B4EFF" stopOpacity="0" />
+            </linearGradient>
+          </defs>
           <path
             d={buildTrendPath(
-              trendPoints.map((point) => point.totalGb),
+              activeTrendPoints.map((point) => point.totalGb),
               maxValue,
               980,
               220,
@@ -1309,9 +1546,9 @@ function TrendsPage({
             stroke="#6B4EFF"
             strokeWidth="2.5"
           />
-          {trendPoints.map((point, index) => {
+          {activeTrendPoints.map((point, index) => {
             if (point.day !== anomalyDay) return null;
-            const x = (index / (trendPoints.length - 1)) * 980 + 10;
+            const x = (index / (activeTrendPoints.length - 1)) * 980 + 10;
             const y = 240 - (point.totalGb / maxValue) * 220;
             return (
               <g key={point.day} onClick={onOpenAnomaly} style={{ cursor: "pointer" }}>
@@ -1320,6 +1557,41 @@ function TrendsPage({
               </g>
             );
           })}
+        </svg>
+      </Card>
+
+      {/* Growth Analysis Bar Chart */}
+      <Card className={styles.chartContainer}>
+        <CardHeader
+          header={<Body1Strong>Growth Analysis (Daily Storage delta)</Body1Strong>}
+          description={<Caption1>Daily storage volume change in GB</Caption1>}
+        />
+        <svg viewBox="0 0 1000 160" className={styles.trendSvg} role="img" aria-label="Daily storage growth">
+          {dailyGrowthData.map((d, index) => {
+            const x = (index / (dailyGrowthData.length - 1)) * 960 + 20;
+            const barHeight = Math.abs((d.growthGb / maxGrowthGb) * 100);
+            const isAnomaly = d.day === anomalyDay;
+            const barColor = isAnomaly ? "#E65F5C" : (d.growthGb >= 0 ? "#107C41" : "#A80000");
+            const y = d.growthGb >= 0 ? 120 - barHeight : 120;
+            return (
+              <g key={d.day}>
+                <rect
+                  x={x - 8}
+                  y={y}
+                  width="16"
+                  height={Math.max(barHeight, 2)}
+                  fill={barColor}
+                  rx="2"
+                />
+                <Caption1>
+                  <text x={x} y="150" textAnchor="middle" fill={tokens.colorNeutralForeground4} fontSize="8px">
+                    {index % 5 === 0 ? `D${index+1}` : ""}
+                  </text>
+                </Caption1>
+              </g>
+            );
+          })}
+          <line x1="10" y1="120" x2="990" y2="120" stroke={tokens.colorNeutralStroke2} />
         </svg>
       </Card>
 
@@ -1340,7 +1612,7 @@ function TrendsPage({
               </tr>
             </thead>
             <tbody>
-              {trendPoints.slice(-12).map((point, index, points) => {
+              {activeTrendPoints.slice(-12).map((point, index, points) => {
                 const previous = points[index - 1]?.totalGb ?? point.totalGb;
                 const growthGb = Number((point.totalGb - previous).toFixed(2));
                 const growthPct = previous === 0 ? 0 : Number(((growthGb / previous) * 100).toFixed(2));
@@ -1483,11 +1755,13 @@ function QueryViewsPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedView.rows.map((row, rowIndex) => (
-                    <tr key={`row-${rowIndex}`}>
+                  {selectedView.rows.map((row, index) => (
+                    <tr key={index}>
                       {selectedView.columns.map((column) => (
-                        <td key={`${rowIndex}-${column}`} className={styles.denseCell}>
-                          {String(row[column] ?? "")}
+                        <td key={column} className={styles.denseCell}>
+                          {typeof row[column] === "number"
+                            ? (column.includes("bytes") ? formatStorage(Number(row[column]) / (1024 * 1024 * 1024)) : Number(row[column]).toLocaleString())
+                            : String(row[column])}
                         </td>
                       ))}
                     </tr>
@@ -1496,11 +1770,10 @@ function QueryViewsPage({
               </table>
             </div>
           ) : (
-            <Card>
-              <Body1>Query completed successfully in 224 ms.</Body1>
-              <Body1>Rows returned: {selectedView.rows.length}</Body1>
-              <Body1>Source: {selectedView.viewName}</Body1>
-            </Card>
+            <div style={{ ...shorthands.padding("10px") }}>
+              <Body1Strong>Query executed successfully.</Body1Strong>
+              <p>Rows affected: {selectedView.rows.length}</p>
+            </div>
           )}
         </Card>
       </div>
@@ -1521,98 +1794,96 @@ function RetentionPage({
   projectedHistoricalGb: number;
   projectedSavingsGb: number;
 }) {
-  const savingsPct = Number(((projectedSavingsGb / 2478.08) * 100).toFixed(1));
-
   return (
     <>
-      <Card className={styles.warningCard}>
-        <CardHeader
-          header={<Body1Strong>Future concept / Post-preview concept</Body1Strong>}
-          description={<Body1>Generating this estimate requires an on-demand storage scan and may consume Fabric capacity.</Body1>}
-        />
-      </Card>
-
       <Card>
         <CardHeader
-          header={<Body1Strong>Retention simulation</Body1Strong>}
-          description={<Caption1>This preview estimates impact only. No retention policy is changed.</Caption1>}
+          header={<Body1Strong>Retention configuration simulation</Body1Strong>}
+          description={<Caption1>Model storage cost impact of altering time-travel snapshots</Caption1>}
         />
-
         <div className={styles.filterRow}>
-          <Field label="Current retention period">
-            <Input value="30 days" readOnly />
-          </Field>
-          <Field label="Proposed retention period">
-            <Dropdown value={`${retentionDays} days`} onOptionSelect={(_, data) => setRetentionDays(data.optionValue ?? "14")}>
-              <Option value="7">7 days</Option>
-              <Option value="14">14 days</Option>
-              <Option value="21">21 days</Option>
-              <Option value="30">30 days</Option>
-            </Dropdown>
-          </Field>
-          <Field label="Current historical storage">
-            <Input value={formatStorage(2478.08)} readOnly />
-          </Field>
-          <Field label="Projected historical storage">
-            <Input value={formatStorage(projectedHistoricalGb)} readOnly />
-          </Field>
-          <Field label="Projected savings">
-            <Input value={formatStorage(projectedSavingsGb)} readOnly />
-          </Field>
-          <Field label="Projected savings %">
-            <Input value={`${savingsPct.toFixed(1)}%`} readOnly />
+          <Field label="Configure retention days">
+            <Input
+              type="number"
+              value={retentionDays}
+              onChange={(_, data) => setRetentionDays(data.value)}
+              min="1"
+              max="90"
+            />
           </Field>
         </div>
-
-        <Body1>Simulation timestamp: Today, 6:18 AM</Body1>
       </Card>
+
+      <div className={styles.sectionGrid}>
+        <Card>
+          <CardHeader
+            header={<Body1Strong>Retention simulation metrics</Body1Strong>}
+            description={<Caption1>Impact of proposed policy</Caption1>}
+          />
+          <Body1>Current policy: 30 days</Body1>
+          <Body1>Proposed policy: {retentionDays} days</Body1>
+          <Body1>Projected historical storage: {formatStorage(projectedHistoricalGb)}</Body1>
+          <Body1Strong>Estimated savings: {formatStorage(projectedSavingsGb)}</Body1Strong>
+          <Badge appearance="filled" color="important">
+            Requires tenant admin approval
+          </Badge>
+        </Card>
+      </div>
     </>
   );
 }
 
 function AlertsPage({ styles }: { styles: ReturnType<typeof useStyles> }) {
   return (
-    <>
-      <Card className={styles.warningCard}>
-        <CardHeader
-          header={<Body1Strong>Future concept (P1)</Body1Strong>}
-          description={<Body1>Alert-management capabilities shown here are proposed for a post-preview release.</Body1>}
-        />
-      </Card>
-
-      <Card>
-        <CardHeader
-          header={<Body1Strong>Alert management</Body1Strong>}
-          description={<Caption1>Configure storage spike, absolute threshold, and inactive table alerts</Caption1>}
-        />
-        <div className={styles.denseTableWrap}>
-          <table className={styles.denseTable}>
-            <thead>
-              <tr>
-                <th className={styles.denseCell}>Alert</th>
-                <th className={styles.denseCell}>Enabled</th>
-                <th className={styles.denseCell}>Severity</th>
-                <th className={styles.denseCell}>Threshold</th>
-                <th className={styles.denseCell}>Destination</th>
-                <th className={styles.denseCell}>Last triggered</th>
+    <Card>
+      <CardHeader
+        header={<Body1Strong>Active storage alert rules</Body1Strong>}
+        description={<Caption1>Manage event-based notifications and delivery destinations</Caption1>}
+      />
+      <div className={styles.denseTableWrap}>
+        <table className={styles.denseTable}>
+          <thead>
+            <tr>
+              <th className={styles.denseCell}>Rule name</th>
+              <th className={styles.denseCell}>Status</th>
+              <th className={styles.denseCell}>Severity</th>
+              <th className={styles.denseCell}>Trigger condition</th>
+              <th className={styles.denseCell}>Alert destination</th>
+              <th className={styles.denseCell}>Last triggered</th>
+            </tr>
+          </thead>
+          <tbody>
+            {alertRules.map((rule) => (
+              <tr key={rule.id}>
+                <td className={styles.denseCell}>{rule.ruleName}</td>
+                <td className={styles.denseCell}>
+                  <Badge appearance="filled" color={rule.enabled ? "success" : "subtle"}>
+                    {rule.enabled ? "Enabled" : "Disabled"}
+                  </Badge>
+                </td>
+                <td className={styles.denseCell}>
+                  <Badge
+                    appearance="outline"
+                    color={
+                      rule.severity === "Critical"
+                        ? "important"
+                        : rule.severity === "Warning"
+                        ? "warning"
+                        : "informative"
+                    }
+                  >
+                    {rule.severity}
+                  </Badge>
+                </td>
+                <td className={styles.denseCell}>{rule.threshold}</td>
+                <td className={styles.denseCell}>{rule.destination}</td>
+                <td className={styles.denseCell}>{rule.lastTriggered}</td>
               </tr>
-            </thead>
-            <tbody>
-              {alertRules.map((rule) => (
-                <tr key={rule.id}>
-                  <td className={styles.denseCell}>{rule.ruleName}</td>
-                  <td className={styles.denseCell}>{rule.enabled ? "Enabled" : "Disabled"}</td>
-                  <td className={styles.denseCell}>{rule.severity}</td>
-                  <td className={styles.denseCell}>{rule.threshold}</td>
-                  <td className={styles.denseCell}>{rule.destination}</td>
-                  <td className={styles.denseCell}>{rule.lastTriggered}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }
 
@@ -1631,65 +1902,34 @@ function TableDetailsPane({
         <Title3>
           {table.schema}.{table.tableName}
         </Title3>
-        <Button appearance="subtle" icon={<DismissRegular />} onClick={onClose} />
+        <Button icon={<DismissRegular />} onClick={onClose} appearance="subtle" aria-label="Close pane" />
       </div>
 
-      <Card>
-        <CardHeader
-          header={<Body1Strong>Storage composition</Body1Strong>}
-          description={
-            <Body1>
-              Total {formatStorage(table.totalGb)} · Active {formatStorage(table.activeGb)} · Historical {formatStorage(table.historicalGb)}
-            </Body1>
-          }
-        />
-      </Card>
+      <div className={styles.sidePaneContent}>
+        <Card>
+          <CardHeader header={<Body1Strong>Composition</Body1Strong>} />
+          <Body1>Total size: {formatStorage(table.totalGb)}</Body1>
+          <Body1>Active storage: {formatStorage(table.activeGb)}</Body1>
+          <Body1>Historical storage: {formatStorage(table.historicalGb)}</Body1>
+          <Body1>Soft-deleted storage: {formatStorage(table.softDeletedGb)}</Body1>
+        </Card>
 
-      <Card>
-        <CardHeader
-          header={<Body1Strong>30-day storage trend</Body1Strong>}
-          description={<Caption1>Recent growth: {table.growth30dPct.toFixed(1)}%</Caption1>}
-        />
-      </Card>
+        <Card>
+          <CardHeader header={<Body1Strong>File footprint</Body1Strong>} />
+          <Body1>Number of files: {table.fileCount.toLocaleString()}</Body1>
+          <Body1>Expired files: {table.expiredFiles.toLocaleString()}</Body1>
+          <Body1>Non-referenced files: {table.nonReferencedFiles.toLocaleString()}</Body1>
+        </Card>
 
-      <Card>
-        <CardHeader
-          header={<Body1Strong>Activity summary</Body1Strong>}
-          description={<Body1>Queries in last 30 days: {table.queriesLast30Days.toLocaleString()}</Body1>}
-        />
-      </Card>
-
-      <Card>
-        <CardHeader
-          header={<Body1Strong>File details</Body1Strong>}
-          description={
-            <Body1>
-              Files: {table.fileCount.toLocaleString()} · Expired: {table.expiredFiles.toLocaleString()} · Non-referenced: {table.nonReferencedFiles.toLocaleString()}
-            </Body1>
-          }
-        />
-      </Card>
-
-      <Card>
-        <CardHeader
-          header={<Body1Strong>Last query</Body1Strong>}
-          description={<Body1>{table.lastAccessed}</Body1>}
-        />
-      </Card>
-
-      <Card>
-        <CardHeader
-          header={<Body1Strong>Last write</Body1Strong>}
-          description={<Body1>{table.lastModified}</Body1>}
-        />
-      </Card>
-
-      <Card>
-        <CardHeader
-          header={<Body1Strong>Current retention information</Body1Strong>}
-          description={<Body1>30-day retention policy applied at warehouse scope.</Body1>}
-        />
-      </Card>
+        <Card>
+          <CardHeader header={<Body1Strong>Activity</Body1Strong>} />
+          <Body1>Owner: {table.owner}</Body1>
+          <Body1>Last modified: {table.lastModified}</Body1>
+          <Body1>Last accessed: {table.lastAccessed}</Body1>
+          <Body1>Queries last 30 days: {table.queriesLast30Days.toLocaleString()}</Body1>
+          <Body1>30-day growth: {table.growth30dPct.toFixed(1)}%</Body1>
+        </Card>
+      </div>
     </aside>
   );
 }
@@ -1701,54 +1941,42 @@ function AnomalyPane({
   onOpenTables,
 }: {
   styles: ReturnType<typeof useStyles>;
-  point: { day: string; totalGb: number };
+  point: TrendPoint;
   onClose: () => void;
   onOpenTables: () => void;
 }) {
-  const previousPoint = trendPoints[trendPoints.findIndex((item) => item.day === point.day) - 1];
-  const absoluteGrowth = Number((point.totalGb - (previousPoint?.totalGb ?? point.totalGb)).toFixed(2));
-  const growthPct = previousPoint
-    ? Number(((absoluteGrowth / previousPoint.totalGb) * 100).toFixed(2))
-    : 0;
-
   return (
-    <aside className={styles.sidePane} aria-label="Anomaly investigation">
+    <aside className={styles.sidePane} aria-label="Anomaly inspection">
       <div className={styles.sidePaneHeader}>
-        <Title2>Anomaly investigation</Title2>
-        <Button appearance="subtle" icon={<DismissRegular />} onClick={onClose} />
+        <Title3>Anomaly details</Title3>
+        <Button icon={<DismissRegular />} onClick={onClose} appearance="subtle" aria-label="Close pane" />
       </div>
 
-      <Card>
-        <CardHeader
-          header={<Body1Strong>Date</Body1Strong>}
-          description={<Body1>{point.day}</Body1>}
-        />
-      </Card>
+      <div className={styles.sidePaneContent}>
+        <Card className={styles.warningCard}>
+          <CardHeader header={<Body1Strong>Storage spike on {point.day}</Body1Strong>} />
+          <Body1>
+            The warehouse grew significantly on {point.day}, reaching {formatStorage(point.totalGb)}.
+          </Body1>
+        </Card>
 
-      <Card>
-        <CardHeader
-          header={<Body1Strong>Absolute and percentage growth</Body1Strong>}
-          description={<Body1>{absoluteGrowth.toFixed(2)} GB ({growthPct.toFixed(2)}%)</Body1>}
-        />
-      </Card>
+        <Card>
+          <CardHeader header={<Body1Strong>Spike breakdown</Body1Strong>} />
+          <Body1>Active storage: {formatStorage(point.activeGb)}</Body1>
+          <Body1>Historical storage: {formatStorage(point.historicalGb)}</Body1>
+          <Body1>System storage: {formatStorage(point.systemGb)}</Body1>
+        </Card>
 
-      <Card>
-        <CardHeader
-          header={<Body1Strong>Storage categories responsible</Body1Strong>}
-          description={<Body1>Historical/time-travel data and active data were the largest contributors.</Body1>}
-        />
-      </Card>
-
-      <Card>
-        <CardHeader
-          header={<Body1Strong>Top contributing tables</Body1Strong>}
-          description={<Body1>dbo.fact_sales, finance.transaction_history, staging.raw_customer_events.</Body1>}
-        />
-      </Card>
-
-      <Button appearance="primary" onClick={onOpenTables} icon={<OpenRegular />}>
-        Open filtered Tables view
-      </Button>
+        <Card>
+          <CardHeader header={<Body1Strong>Ingestion source</Body1Strong>} />
+          <Body1>
+            An intensive ingestion and backfill write on <strong>dbo.fact_sales</strong> caused the spike.
+          </Body1>
+          <Button appearance="primary" onClick={onOpenTables} icon={<OpenRegular />}>
+            Open filtered Tables view
+          </Button>
+        </Card>
+      </div>
     </aside>
   );
 }
