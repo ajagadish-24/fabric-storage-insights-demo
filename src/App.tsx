@@ -429,11 +429,6 @@ function App() {
   const selectedView =
     queryViewDefinitions.find((view) => view.viewName === selectedViewName) ?? queryViewDefinitions[0];
 
-  const topContributors = useMemo(
-    () => [...tableStorageRecords].sort((a, b) => b.totalGb - a.totalGb).slice(0, 5),
-    [],
-  );
-
   const filteredBreakdownCategories = useMemo(() => {
     if (!selectedBreakdownFilter.length) {
       return storageCategories;
