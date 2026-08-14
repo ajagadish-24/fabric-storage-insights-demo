@@ -19,6 +19,8 @@
     "test:fabric": "node scripts/open-fabric-portal.mjs"
   },
   "dependencies": {
+    "@fluentui/react-components": "^9.74.6",
+    "@fluentui/react-icons": "^2.0.337",
     "@microsoft/fabric-app-data": "1.1.0",
     "@microsoft/fabric-app-data-embed-client": "1.0.0",
     "@microsoft/fabric-app-data-proxy": "1.0.0",

@@ -40,20 +40,23 @@ export interface IAuthService {
  * - `VITE_FABRIC_PORTAL_URL` — Fabric portal base URL
  */
 export function bootstrapAuth(): IAuthService {
-    const client = getRayfinClient();
-
     const workspaceId = import.meta.env.VITE_FABRIC_WORKSPACE_ID;
     const projectId = import.meta.env.VITE_FABRIC_ITEM_ID;
     const fabricPortalUrl = import.meta.env.VITE_FABRIC_PORTAL_URL;
+    const isFabricEmbedded = new URLSearchParams(window.location.search).get("fabricEmbedded") === "true";
 
     if (
         !workspaceId ||
         !projectId ||
         !fabricPortalUrl
     ) {
+        if (import.meta.env.DEV && !isFabricEmbedded) {
+            return new LocalDevAuthService();
+        }
         throw new Error(`Missing required env vars for Fabric auth - run 'npx rayfin up'`);
     }
 
+    const client = getRayfinClient();
     const fabricOptions: FabricAuthOptions = {
         workspaceId,
         projectId,
@@ -76,5 +79,11 @@ class RayfinAuthService implements IAuthService {
 
     async initEmbeddedAuth(): Promise<OpaqueSession | null> {
         return sdkInitEmbeddedAuth(this.client.auth, this.fabricOptions);
+    }
+}
+
+class LocalDevAuthService implements IAuthService {
+    async initEmbeddedAuth(): Promise<OpaqueSession | null> {
+        return { isAuthenticated: true } as OpaqueSession;
     }
 }
