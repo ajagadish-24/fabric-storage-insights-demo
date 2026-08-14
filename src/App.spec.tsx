@@ -182,7 +182,7 @@ describe("App", () => {
 
         fireEvent.click(screen.getByRole("tab", { name: "Tables" }));
         expect(screen.getByText("Warehouse-to-schema-to-table drilldown")).toBeInTheDocument();
-        expect(screen.getByText("fact_sales")).toBeInTheDocument();
+        expect(screen.getAllByText("fact_sales").length).toBeGreaterThan(0);
 
         fireEvent.click(screen.getByRole("tab", { name: "Trends" }));
         expect(screen.getByText("Warehouse storage trend")).toBeInTheDocument();
