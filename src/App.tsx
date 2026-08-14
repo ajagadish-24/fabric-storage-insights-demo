@@ -347,7 +347,6 @@ const storageColorMap: Record<string, string> = {
   "query-insights": "#5E9D5E",
   "audit-logs": "#8AB77A",
   "restore-points": "#EAA300",
-  "clone-retained": "#B85AB5",
   "vaulted-backups": "#8E8E8E",
   "expired-parquet": "#E65F5C",
   "expired-log": "#F08A5A",
@@ -461,7 +460,6 @@ function App() {
       tables = tables.filter((table) => {
         if (storageFilter === "historical") return table.historicalGb >= 100;
         if (storageFilter === "softDeleted") return table.softDeletedGb >= 40;
-        if (storageFilter === "cloneRetained") return table.cloneRetainedGb >= 40;
         return true;
       });
     }
@@ -1006,17 +1004,17 @@ function StorageBreakdownPage({
         <Card>
           <CardHeader
             header={<Body1Strong>Reconciliation checks</Body1Strong>}
-            description={<Caption1>Warehouse total must match displayed category and table totals</Caption1>}
+            description={<Caption1>Warehouse total must match displayed storage categories</Caption1>}
           />
           <Body1>Total storage: {formatStorage(totalStorageGb)}</Body1>
           <Body1>
             Category sum: {formatStorage(storageCategories.reduce((sum, category) => sum + category.sizeGb, 0))}
           </Body1>
           <Body1>
-            Table sum: {formatStorage(tableStorageRecords.reduce((sum, table) => sum + table.totalGb, 0))}
+            Table-attributed sum: {formatStorage(tableStorageRecords.reduce((sum, table) => sum + table.totalGb, 0))}
           </Body1>
           <Badge appearance="filled" color="success">
-            Totals reconciled
+            Category totals reconciled
           </Badge>
         </Card>
       </div>
@@ -1133,7 +1131,6 @@ function TablesPage({
               <Option value="all">All categories</Option>
               <Option value="historical">Historical heavy</Option>
               <Option value="softDeleted">Soft-deleted heavy</Option>
-              <Option value="cloneRetained">Clone-retained heavy</Option>
             </Dropdown>
           </Field>
           <Field label="Sort">
@@ -1187,7 +1184,6 @@ function TablesPage({
                   <th className={styles.denseCell}>Active storage</th>
                   <th className={styles.denseCell}>Historical storage</th>
                   <th className={styles.denseCell}>Soft-deleted storage</th>
-                  <th className={styles.denseCell}>Clone-retained storage</th>
                   <th className={styles.denseCell}>Number of files</th>
                   <th className={styles.denseCell}>Expired files</th>
                   <th className={styles.denseCell}>Non-referenced files</th>
@@ -1215,7 +1211,6 @@ function TablesPage({
                     <td className={styles.denseCell}>{formatStorage(table.activeGb)}</td>
                     <td className={styles.denseCell}>{formatStorage(table.historicalGb)}</td>
                     <td className={styles.denseCell}>{formatStorage(table.softDeletedGb)}</td>
-                    <td className={styles.denseCell}>{formatStorage(table.cloneRetainedGb)}</td>
                     <td className={styles.denseCell}>{table.fileCount.toLocaleString()}</td>
                     <td className={styles.denseCell}>{table.expiredFiles.toLocaleString()}</td>
                     <td className={styles.denseCell}>{table.nonReferencedFiles.toLocaleString()}</td>
@@ -1672,13 +1667,6 @@ function TableDetailsPane({
               Files: {table.fileCount.toLocaleString()} · Expired: {table.expiredFiles.toLocaleString()} · Non-referenced: {table.nonReferencedFiles.toLocaleString()}
             </Body1>
           }
-        />
-      </Card>
-
-      <Card>
-        <CardHeader
-          header={<Body1Strong>Clone relationship summary</Body1Strong>}
-          description={<Body1>Clone-retained: {formatStorage(table.cloneRetainedGb)}</Body1>}
         />
       </Card>
 

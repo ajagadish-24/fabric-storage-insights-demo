@@ -68,11 +68,11 @@ export function useSemanticModelQuery(
     options: UseSemanticModelQueryOptions,
 ): UseSemanticModelQueryResult {
     const { connection, query, bypassCache } = options;
-    const [data, setData] = useState<CachedQueryResult | undefined>();
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<Error | undefined>();
-
     const canExecute = Boolean(connection && query);
+
+    const [data, setData] = useState<CachedQueryResult | undefined>();
+    const [isLoading, setIsLoading] = useState(canExecute);
+    const [error, setError] = useState<Error | undefined>();
 
     const execute = useCallback(async () => {
         if (!canExecute) return;
@@ -97,7 +97,11 @@ export function useSemanticModelQuery(
     }, [connection, query, bypassCache, canExecute]);
 
     useEffect(() => {
-        execute();
+        const handle = window.setTimeout(() => {
+            void execute();
+        }, 0);
+
+        return () => window.clearTimeout(handle);
     }, [execute]);
 
     return { data, isLoading, error, refetch: execute };

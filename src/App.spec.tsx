@@ -11,6 +11,18 @@ import { ThemeContext } from "@/hooks/theme.context";
 import App from "@/App";
 
 vi.mock("@fluentui/react-icons", () => ({
+    ArrowDownloadRegular: () => null,
+    ArrowSyncRegular: () => null,
+    ChartMultipleRegular: () => null,
+    DatabaseRegular: () => null,
+    DismissRegular: () => null,
+    DocumentTableRegular: () => null,
+    FilterRegular: () => null,
+    InfoRegular: () => null,
+    OpenRegular: () => null,
+    QuestionCircleRegular: () => null,
+    SearchRegular: () => null,
+    SettingsRegular: () => null,
     WeatherMoonRegular: () => null,
     WeatherSunnyRegular: () => null,
 }));
@@ -40,6 +52,7 @@ vi.mock("@fluentui/react-components", async () => {
 
     return {
         Badge: passthrough("span"),
+        Body1: passthrough("span"),
         Body1Strong: passthrough("strong"),
         Button: passthrough("button"),
         Card: passthrough("section"),
@@ -55,7 +68,28 @@ vi.mock("@fluentui/react-components", async () => {
                 {description}
             </header>
         ),
+        Caption1: passthrough("span"),
+        Dropdown: ({
+            children,
+            value,
+        }: React.PropsWithChildren<{ value?: string } & Record<string, unknown>>) => (
+            <select value={value} onChange={() => {}}>
+                {children}
+            </select>
+        ),
+        Field: passthrough("label"),
         FluentProvider: passthrough("div"),
+        Input: ({ value, placeholder }: { value?: string; placeholder?: string }) => (
+            <input value={value} placeholder={placeholder} readOnly />
+        ),
+        Option: ({
+            children,
+            value,
+        }: React.PropsWithChildren<{ value?: string } & Record<string, unknown>>) => (
+            <option value={value}>
+                {children}
+            </option>
+        ),
         ProgressBar: passthrough("progress"),
         Table: passthrough("table"),
         TableBody: passthrough("tbody"),
@@ -69,7 +103,9 @@ vi.mock("@fluentui/react-components", async () => {
             ...props
         }: React.PropsWithChildren<{ block?: boolean } & Record<string, unknown>>) =>
             React.createElement(block ? "div" : "span", props, children),
+        Title3: passthrough("h3"),
         Title2: passthrough("h2"),
+        Tooltip: ({ children }: React.PropsWithChildren<Record<string, unknown>>) => <>{children}</>,
         Tab,
         TabList: ({
             children,
@@ -107,7 +143,11 @@ vi.mock("@fluentui/react-components", async () => {
         }),
         shorthands: {
             padding: () => ({}),
+            border: () => ({}),
             borderBottom: () => ({}),
+            borderLeft: () => ({}),
+            borderRadius: () => ({}),
+            borderRight: () => ({}),
         },
         tokens: {
             colorNeutralBackground2: "",
@@ -128,9 +168,9 @@ describe("App", () => {
             </ThemeContext.Provider>,
         );
 
-        expect(screen.getByText("Fabric Storage Insights")).toBeInTheDocument();
-        expect(screen.getByText("Storage health score")).toBeInTheDocument();
-        expect(screen.getByText("Total Warehouse Storage")).toBeInTheDocument();
+        expect(screen.getAllByText("Storage Insights").length).toBeGreaterThan(0);
+        expect(screen.getAllByText("Total storage").length).toBeGreaterThan(0);
+        expect(screen.getAllByText("Storage composition").length).toBeGreaterThan(0);
     });
 
     it("switches between navigation pages", () => {
@@ -140,12 +180,12 @@ describe("App", () => {
             </ThemeContext.Provider>,
         );
 
-        fireEvent.click(screen.getByRole("tab", { name: "Warehouse Tables" }));
-        expect(screen.getByText("Largest warehouse tables")).toBeInTheDocument();
-        expect(screen.getByText("fact_sales_transactions")).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("tab", { name: "Tables" }));
+        expect(screen.getByText("Warehouse-to-schema-to-table drilldown")).toBeInTheDocument();
+        expect(screen.getByText("fact_sales")).toBeInTheDocument();
 
-        fireEvent.click(screen.getByRole("tab", { name: "Activity" }));
-        expect(screen.getByText("Recent storage activity")).toBeInTheDocument();
-        expect(screen.getByText("Nightly ingestion complete")).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("tab", { name: "Trends" }));
+        expect(screen.getByText("Warehouse storage trend")).toBeInTheDocument();
+        expect(screen.getByText("Daily growth view")).toBeInTheDocument();
     });
 });
